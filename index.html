@@ -1,0 +1,767 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f4f2ec">
+  <title>SI Card Reader</title>
+  <style>
+    :root { color-scheme: light; --ink:#20251f; --muted:#72796f; --line:#d8d9d0; --paper:#fbfaf6; --green:#235b42; --pale:#e8eee8; }
+    * { box-sizing:border-box }
+    body { margin:0; background:#f4f2ec; color:var(--ink); font:15px/1.5 ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif }
+    main { width:min(980px, calc(100% - 36px)); margin:48px auto 64px }
+    header { display:flex; align-items:flex-end; justify-content:space-between; gap:24px; margin-bottom:28px }
+    .eyebrow { margin:0 0 8px; color:var(--green); font-size:12px; font-weight:750; letter-spacing:.12em; text-transform:uppercase }
+    h1 { margin:0; font-size:clamp(30px,5vw,42px); letter-spacing:-.045em; line-height:1.08 }
+    .intro { margin:10px 0 0; color:var(--muted) }
+    .status { display:flex; align-items:center; gap:9px; padding:8px 12px; border:1px solid var(--line); border-radius:99px; background:var(--paper); color:#5d655d; white-space:nowrap; font-size:13px }
+    .dot { width:8px; height:8px; border-radius:50%; background:#9a9f97 }
+    .status.connected { color:var(--green); border-color:#b8c9bc }
+    .status.connected .dot { background:#328052; box-shadow:0 0 0 3px #32805220 }
+    .panel { background:var(--paper); border:1px solid var(--line); border-radius:14px; overflow:hidden; box-shadow:0 8px 24px #22220d08 }
+    .controls { display:flex; align-items:end; gap:12px; padding:18px; border-bottom:1px solid var(--line); flex-wrap:wrap }
+    .device-select { min-width:230px; max-width:100% }
+    label { display:grid; gap:5px; color:var(--muted); font-size:12px; font-weight:650 }
+    select,button { height:40px; border:1px solid var(--line); border-radius:8px; background:white; color:var(--ink); font:inherit }
+    select { min-width:126px; padding:0 32px 0 11px }
+    button { padding:0 15px; font-size:14px; font-weight:650; cursor:pointer; transition:background .15s,border-color .15s }
+    button:hover:not(:disabled) { border-color:#a8b5aa; background:#f6f8f4 }
+    button:disabled { cursor:not-allowed; opacity:.45 }
+    button.primary { color:white; border-color:var(--green); background:var(--green) }
+    button.primary:hover:not(:disabled) { background:#194832 }
+    .spacer { flex:1 }
+    .log-head { display:flex; justify-content:space-between; align-items:center; padding:14px 18px; color:var(--muted); font-size:12px; font-weight:700; letter-spacing:.06em; text-transform:uppercase }
+    .log { min-height:320px; max-height:56vh; overflow:auto; padding:0 18px 18px }
+    .empty { display:grid; min-height:275px; place-items:center; text-align:center; color:var(--muted) }
+    .empty-inner { max-width:360px }
+    .empty-mark { display:grid; place-items:center; width:48px; height:48px; margin:0 auto 12px; border-radius:14px; background:var(--pale); color:var(--green); font-size:22px }
+    .empty strong { display:block; margin-bottom:3px; color:var(--ink); font-size:15px }
+    .entry { padding:13px 0; border-top:1px solid #e8e8e1 }
+    .entry-meta { display:flex; gap:10px; margin-bottom:6px; color:var(--muted); font:12px ui-monospace,SFMono-Regular,Consolas,monospace }
+    .entry-meta strong { color:var(--green); font-weight:700 }
+    .entry pre { margin:0; overflow-wrap:anywhere; white-space:pre-wrap; color:#262d27; font:13px/1.6 ui-monospace,SFMono-Regular,Consolas,monospace }
+    .entry .ascii { margin-top:4px; color:#777d73 }
+    .structured { margin:0 18px 16px; padding:14px; border:1px solid #d9e3d8; border-radius:10px; background:#f4f7f2 }
+    .structured h2 { margin:0 0 9px; color:var(--green); font-size:12px; letter-spacing:.07em; text-transform:uppercase }
+    .decoded { padding:9px 0; border-top:1px solid #e0e7de }
+    .decoded:first-of-type { border-top:0 }
+    .decoded strong { font-size:14px }
+    .decoded code { color:#656e64; font:12px ui-monospace,SFMono-Regular,Consolas,monospace }
+    .decoded p { margin:3px 0 0; color:#626a61; font-size:13px }
+    .card-summary { margin:0 0 20px; padding:18px; border:1px solid #cad8ca; border-radius:14px; background:var(--paper); box-shadow:0 8px 24px #22220d08 }
+    .card-summary h2 { margin:0; font-size:18px; letter-spacing:-.02em }
+    .summary-top { display:flex; justify-content:space-between; align-items:center; gap:16px; margin-bottom:14px }
+    .summary-id { color:var(--muted); font-size:13px }
+    .elapsed { text-align:right }
+    .elapsed span { display:block; color:var(--muted); font-size:11px; font-weight:700; letter-spacing:.07em; text-transform:uppercase }
+    .elapsed strong { color:var(--green); font-size:clamp(24px,4vw,34px); letter-spacing:-.04em; font-variant-numeric:tabular-nums }
+    .route { width:100%; border-collapse:collapse; font-size:14px }
+    .route th { padding:7px 8px; color:var(--muted); text-align:left; font-size:11px; letter-spacing:.06em; text-transform:uppercase }
+    .route td { padding:8px; border-top:1px solid #e8e8e1; font-variant-numeric:tabular-nums }
+    .route td:first-child { width:90px; color:var(--green); font-weight:700 }
+    .route td:nth-child(2) { font-weight:650 }
+    .summary-note { margin:10px 0 0; color:var(--muted); font-size:12px }
+    footer { margin:13px 2px 0; color:var(--muted); font-size:12px }
+    .error { margin:14px 18px 0; padding:10px 12px; border:1px solid #e8c8bc; border-radius:8px; background:#fff6f2; color:#8d3d24; font-size:13px }
+    [hidden] { display:none !important }
+    @media(max-width:600px) { main { margin-top:28px } header { align-items:flex-start; flex-direction:column } .controls { align-items:stretch } .spacer { display:none } .controls button { flex:1 } }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <div>
+        <p class="eyebrow">SPORTident · Reader monitor</p>
+        <h1>SI Card Reader</h1>
+        <p class="intro">Connect a reader and inspect the data it sends.</p>
+      </div>
+      <div class="status" id="status"><span class="dot"></span><span id="statusText">Disconnected</span></div>
+    </header>
+
+    <section class="card-summary" id="cardSummary" aria-live="polite" hidden>
+      <div class="summary-top">
+        <div><h2>Card readout</h2><div class="summary-id" id="summaryId"></div></div>
+        <div class="elapsed"><span>Total time</span><strong id="summaryElapsed">—</strong></div>
+      </div>
+      <table class="route" aria-label="Card route">
+        <thead><tr><th>Point</th><th>Control</th><th>Time</th></tr></thead>
+        <tbody id="routeRows"></tbody>
+      </table>
+      <p class="summary-note" id="summaryNote" hidden></p>
+    </section>
+
+    <section class="panel" aria-label="Reader data">
+      <div class="controls">
+        <label for="readerSelect">Reader device
+          <select id="readerSelect" class="device-select"><option value="">No authorized reader</option></select>
+        </label>
+        <button id="addUsbReader">Add USB reader</button>
+        <button id="addSerialReader">Add serial reader</button>
+        <label for="baud">Baud rate
+          <select id="baud">
+            <option value="4800">4800</option>
+            <option value="38400" selected>38400</option>
+            <option value="9600">9600</option>
+            <option value="19200">19200</option>
+            <option value="115200">115200</option>
+          </select>
+        </label>
+        <button class="primary" id="connect">Connect reader</button>
+        <button id="disconnect" disabled>Disconnect</button>
+        <span class="spacer"></span>
+        <button id="download" disabled>Save log</button>
+        <button id="clear" disabled>Clear</button>
+      </div>
+      <div class="error" id="error" role="alert" hidden></div>
+      <div class="structured" id="structured" hidden aria-live="polite">
+        <h2>Decoded SPORTident messages</h2>
+        <div id="decodedList"></div>
+      </div>
+      <div class="log-head"><span>Received data</span><span id="count">0 chunks</span></div>
+      <div class="log" id="log" aria-live="polite">
+        <div class="empty" id="empty"><div class="empty-inner"><div class="empty-mark">⌁</div><strong>Waiting for a reader</strong>Connect your USB serial reader, then read a card. Incoming bytes will appear here as hex and text.</div></div>
+      </div>
+    </section>
+    <footer>USB readers use WebUSB; serial ports use Web Serial. Reader protocol and baud rate can vary by station configuration.</footer>
+  </main>
+  <script>
+    const connectButton = document.querySelector('#connect');
+    const disconnectButton = document.querySelector('#disconnect');
+    const addUsbReaderButton = document.querySelector('#addUsbReader');
+    const addSerialReaderButton = document.querySelector('#addSerialReader');
+    const readerSelect = document.querySelector('#readerSelect');
+    const baudSelect = document.querySelector('#baud');
+    const status = document.querySelector('#status');
+    const statusText = document.querySelector('#statusText');
+    const log = document.querySelector('#log');
+    const empty = document.querySelector('#empty');
+    const count = document.querySelector('#count');
+    const errorBox = document.querySelector('#error');
+    const clearButton = document.querySelector('#clear');
+    const downloadButton = document.querySelector('#download');
+    let port = null;
+    let usbDevice = null;
+    let usbEndpointIn = null;
+    let usbEndpointOut = null;
+    let usbInterfaceNumber = null;
+    let authorizedPorts = [];
+    let reader = null;
+    let writer = null;
+    let chunks = [];
+    let stopping = false;
+    let protocolBuffer = [];
+    let decodedCount = 0;
+    let activeRead = null;
+    let readTimer = null;
+    let latestReadout = null;
+    const LAST_DEVICE_KEY = 'sportident-last-device';
+
+    const commandNames = {
+      0xE5: 'SI-Card 5 inserted', 0xE6: 'SI-Card 6 inserted',
+      0xE7: 'Card removed', 0xE8: 'SI-Card 8/9/10/11 inserted',
+      0xEF: 'Read SI-Card 8/9/10/11 data block', 0xE1: 'Read SI-Card 6 data block',
+      0xB1: 'Read SI-Card 5 data', 0xD3: 'Punch record', 0x06: 'ACK', 0x15: 'NAK'
+    };
+
+    function sportidentCrc(bytes) {
+      let crc = ((bytes[0] || 0) << 8) | (bytes[1] || 0);
+      const tail = bytes.slice(2);
+      // SPORTident's CRC routine appends two zero bytes when the complete
+      // input is even-length, or one when it is odd-length.
+      if (tail.length % 2 === 0) tail.push(0, 0);
+      else tail.push(0);
+      for (let i = 0; i < tail.length; i += 2) {
+        const value = (tail[i] << 8) | (tail[i + 1] || 0);
+        let val = value;
+        for (let bit = 0; bit < 16; bit++) {
+          const carry = (crc & 0x8000) !== 0;
+          crc = (crc << 1) & 0xffff;
+          if (val & 0x8000) crc |= 1;
+          if (carry) crc ^= 0x8005;
+          val = (val << 1) & 0xffff;
+        }
+      }
+      return crc;
+    }
+
+    function addDecoded(title, details, raw) {
+      decodedCount++;
+      const box = document.querySelector('#structured');
+      const list = document.querySelector('#decodedList');
+      box.hidden = false;
+      const row = document.createElement('div');
+      row.className = 'decoded';
+      const heading = document.createElement('strong');
+      heading.textContent = title;
+      const detail = document.createElement('p');
+      detail.textContent = details;
+      const bytes = document.createElement('code');
+      bytes.textContent = raw ? `Frame: ${raw.map(value => value.toString(16).padStart(2, '0').toUpperCase()).join(' ')}` : '';
+      row.append(heading, detail, bytes);
+      list.prepend(row);
+    }
+
+    function frameFor(command, parameters = [], addWakeup = true) {
+      const body = [command, parameters.length, ...parameters];
+      const crc = sportidentCrc(body);
+      return new Uint8Array([...(addWakeup ? [0xFF] : []), 0x02, ...body, (crc >> 8) & 0xFF, crc & 0xFF, 0x03]);
+    }
+
+    async function sendRequest(command, parameters = []) {
+      if (writer) {
+        await writer.write(frameFor(command, parameters, true));
+        return;
+      }
+      if (usbDevice && usbEndpointOut != null) {
+        await usbDevice.transferOut(usbEndpointOut, frameFor(command, parameters, false));
+        return;
+      }
+      throw new Error('Reader output is not available.');
+    }
+
+    function cardFamily(cardNumber, command) {
+      if (command === 0xE5) return { type: 'SI-Card 5', readCommand: 0xB1, parameters: [], responses: 1, stripPrefix: false };
+      if (command === 0xE6) return { type: 'SI-Card 6', readCommand: 0xE1, parameters: [0x08], responses: 3, blocks: 3 };
+      if (cardNumber >= 1000000 && cardNumber < 2000000) return { type: 'SI-Card 9', readCommand: 0xEF, parameters: [0], responses: 2, blocks: 2 };
+      if (cardNumber >= 2000000 && cardNumber < 3000000) return { type: 'SI-Card 8', readCommand: 0xEF, parameters: [0], responses: 2, blocks: 2 };
+      if (cardNumber >= 4000000 && cardNumber < 5000000) return { type: 'pCard', readCommand: 0xEF, parameters: [0], responses: 2, blocks: 2 };
+      if (cardNumber >= 6000000 && cardNumber < 10000000) return { type: cardNumber >= 8000000 ? 'SIAC' : 'SI-Card 10/11', readCommand: 0xEF, parameters: [0x08], responses: 5, blocks: 5 };
+      return null;
+    }
+
+    async function beginCardRead(cardNumber, insertCommand) {
+      if (activeRead) finishCardRead();
+      latestReadout = null;
+      document.querySelector('#cardSummary').hidden = true;
+      const family = cardFamily(cardNumber, insertCommand);
+      if (!family) {
+        addDecoded('Card detected', `Card ${cardNumber}: automatic readout is not configured for this card family.`, []);
+        return;
+      }
+      activeRead = { cardNumber, family, parts: [], received: 0, startedAt: Date.now() };
+      addDecoded('Reading card', `Card ${cardNumber} · ${family.type} · requesting data from station…`, []);
+      try {
+        await sendRequest(family.readCommand, family.parameters);
+      } catch (error) {
+        addDecoded('Read request failed', error.message, []);
+        activeRead = null;
+      }
+    }
+
+    function finishCardRead() {
+      if (!activeRead) return;
+      clearTimeout(readTimer);
+      const read = activeRead;
+      activeRead = null;
+      const raw = read.parts.flat();
+      const layouts = {
+        'SI-Card 5': { id: 6, count: 23, firstPunch: 32, maxPunches: 30, recordLength: 3, oldCard: true, start: { time: 19 }, finish: { time: 21 } },
+        'SI-Card 8': { id: 25, count: 22, firstPunch: 136, maxPunches: 50, start: { day: 12, code: 13, time: 14 }, finish: { day: 16, code: 17, time: 18 } },
+        'SI-Card 9': { id: 25, count: 22, firstPunch: 56, maxPunches: 50, start: { day: 12, code: 13, time: 14 }, finish: { day: 16, code: 17, time: 18 } },
+        pCard: { id: 25, count: 22, firstPunch: 176, maxPunches: 20, start: { day: 12, code: 13, time: 14 }, finish: { day: 16, code: 17, time: 18 } },
+        SIAC: { id: 25, count: 22, firstPunch: 128, maxPunches: 64, start: { day: 12, code: 13, time: 14 }, finish: { day: 16, code: 17, time: 18 } },
+        'SI-Card 10/11': { id: 25, count: 22, firstPunch: 128, maxPunches: 64, start: { day: 12, code: 13, time: 14 }, finish: { day: 16, code: 17, time: 18 } },
+        'SI-Card 6': { id: 11, count: 18, firstPunch: 128, maxPunches: 64, start: { day: 24, code: 25, time: 26 }, finish: { day: 20, code: 21, time: 22 } }
+      };
+      const layout = layouts[read.family.type];
+      if (!layout || raw.length <= layout.count) {
+        latestReadout = { cardNumber: read.cardNumber, type: read.family.type, complete: false, start: null, finish: null, punches: [] };
+        addDecoded('Card data incomplete', `${read.cardNumber} · ${read.family.type} · received ${raw.length} data bytes; expected the complete card readout.`, []);
+        return;
+      }
+      const recordLength = layout.recordLength || 4;
+      const availablePunches = Math.max(0, Math.floor((raw.length - layout.firstPunch) / recordLength));
+      const punchCount = Math.min(raw[layout.count] - (layout.oldCard ? 1 : 0), layout.maxPunches, availablePunches);
+      const punches = [];
+      for (let index = 0; index < punchCount; index++) {
+        let offset = layout.firstPunch + index * recordLength;
+        if (layout.oldCard && offset % 16 === 0) offset++;
+        const dayByte = layout.oldCard ? 0 : raw[offset];
+        const controlCode = layout.oldCard ? raw[offset] : ((dayByte & 0xC0) << 2) | raw[offset + 1];
+        const seconds = layout.oldCard
+          ? (raw[offset + 1] << 8) | raw[offset + 2]
+          : (raw[offset + 2] << 8) | raw[offset + 3];
+        if (seconds === 0xEEEE) continue;
+        const dayIndex = ((dayByte >> 1) & 0x07) % 7;
+        const punchSeconds = (seconds % 43200) + ((dayByte & 1) ? 43200 : 0);
+        const hh = String(Math.floor(punchSeconds / 3600)).padStart(2, '0');
+        const mm = String(Math.floor((punchSeconds % 3600) / 60)).padStart(2, '0');
+        const ss = String(punchSeconds % 60).padStart(2, '0');
+        const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+        const validDay = !layout.oldCard && ((dayByte >> 1) & 0x07) < 7;
+        punches.push({ number: index + 1, controlCode, time: layout.oldCard ? `${hh}:${mm}:${ss}` : `${validDay ? `${days[dayIndex]} ` : ''}${hh}:${mm}:${ss}` });
+      }
+      const readEvent = spec => {
+        if (!spec || raw.length < spec.time + 2) return null;
+        const timeValue = (raw[spec.time] << 8) | raw[spec.time + 1];
+        if (timeValue === 0xEEEE) return null;
+        const dayByte = spec.day == null ? null : raw[spec.day];
+        const secondsOfDay = (timeValue % 43200) + ((dayByte != null && (dayByte & 1)) ? 43200 : 0);
+        const dayIndex = dayByte == null ? null : ((dayByte >> 1) & 0x07);
+        const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+        const hh = String(Math.floor(secondsOfDay / 3600)).padStart(2, '0');
+        const mm = String(Math.floor((secondsOfDay % 3600) / 60)).padStart(2, '0');
+        const ss = String(secondsOfDay % 60).padStart(2, '0');
+        const controlCode = spec.code == null ? null : ((dayByte & 0xC0) << 2) | raw[spec.code];
+        return {
+          controlCode,
+          secondsOfDay,
+          secondsOfWeek: dayIndex != null && dayIndex < 7 ? dayIndex * 86400 + secondsOfDay : null,
+          time: `${dayIndex != null && dayIndex < 7 ? `${days[dayIndex]} ` : ''}${hh}:${mm}:${ss}`
+        };
+      };
+      const cardId = !layout.oldCard && raw.length >= layout.id + 3
+        ? ((raw[layout.id] << 16) | (raw[layout.id + 1] << 8) | raw[layout.id + 2])
+        : read.cardNumber;
+      const summary = `${read.family.type} · SI number ${read.cardNumber} · ${punches.length} punches decoded · ${raw.length} card-data bytes${cardId !== read.cardNumber ? ` · memory ID ${cardId}` : ''}`;
+      latestReadout = {
+        cardNumber: read.cardNumber,
+        type: read.family.type,
+        complete: read.received >= read.family.responses,
+        start: readEvent(layout.start),
+        finish: readEvent(layout.finish),
+        punches
+      };
+      addDecoded('Card readout complete', summary, []);
+      readTimer = null;
+    }
+
+    function showCardSummary() {
+      if (!latestReadout) return;
+      const summary = document.querySelector('#cardSummary');
+      const rows = document.querySelector('#routeRows');
+      rows.replaceChildren();
+      document.querySelector('#summaryId').textContent = `${latestReadout.type} · SI card ${latestReadout.cardNumber}`;
+      let elapsed = null;
+      if (latestReadout.start && latestReadout.finish) {
+        if (latestReadout.start.secondsOfWeek != null && latestReadout.finish.secondsOfWeek != null) {
+          elapsed = (latestReadout.finish.secondsOfWeek - latestReadout.start.secondsOfWeek + 7 * 86400) % (7 * 86400);
+        } else {
+          elapsed = latestReadout.finish.secondsOfDay - latestReadout.start.secondsOfDay;
+          if (elapsed < 0) elapsed += 12 * 3600;
+        }
+      }
+      const duration = elapsed == null ? 'Start or finish missing' : `${Math.floor(elapsed / 3600)}:${String(Math.floor((elapsed % 3600) / 60)).padStart(2, '0')}:${String(elapsed % 60).padStart(2, '0')}`;
+      document.querySelector('#summaryElapsed').textContent = duration;
+      const addRouteRow = (point, control, time) => {
+        const tr = document.createElement('tr');
+        for (const value of [point, control ?? '—', time ?? '—']) {
+          const td = document.createElement('td');
+          td.textContent = String(value);
+          tr.append(td);
+        }
+        rows.append(tr);
+      };
+      const start = latestReadout.start;
+      addRouteRow('Start', start?.controlCode == null ? 'Start' : start.controlCode, start?.time);
+      for (const punch of latestReadout.punches) addRouteRow(String(punch.number), punch.controlCode, punch.time);
+      const finish = latestReadout.finish;
+      addRouteRow('Finish', finish?.controlCode == null ? 'Finish' : finish.controlCode, finish?.time);
+      const note = document.querySelector('#summaryNote');
+      const notes = [];
+      if (!latestReadout.complete) notes.push('The reader removed the card before all card data was received.');
+      if (!latestReadout.start || !latestReadout.finish) notes.push('The card data does not include both start and finish times.');
+      note.textContent = notes.join(' ');
+      note.hidden = notes.length === 0;
+      summary.hidden = false;
+    }
+
+    function parseSportidentBytes(input) {
+      protocolBuffer.push(...input);
+      // Keep this parser bounded if the port is streaming non-SI data.
+      if (protocolBuffer.length > 8192) protocolBuffer = protocolBuffer.slice(-2048);
+      while (protocolBuffer.length) {
+        const start = protocolBuffer.indexOf(0x02);
+        if (start < 0) { protocolBuffer = []; return; }
+        if (start) protocolBuffer.splice(0, start);
+        if (protocolBuffer.length < 3) return;
+        const payloadLength = protocolBuffer[2];
+        const frameLength = payloadLength + 6;
+        if (payloadLength < 2 || frameLength > 261) { protocolBuffer.shift(); continue; }
+        if (protocolBuffer.length < frameLength) return;
+        const frame = protocolBuffer.slice(0, frameLength);
+        if (frame[frameLength - 1] !== 0x03) { protocolBuffer.shift(); continue; }
+        protocolBuffer.splice(0, frameLength);
+        const command = frame[1];
+        const protectedBytes = frame.slice(1, frameLength - 3);
+        const receivedCrc = (frame[frameLength - 3] << 8) | frame[frameLength - 2];
+        const valid = sportidentCrc(protectedBytes) === receivedCrc;
+        const stationCode = (frame[3] << 8) | frame[4];
+        const data = frame.slice(5, frameLength - 3);
+        let detail = `Station ${stationCode} · ${data.length} data byte${data.length === 1 ? '' : 's'} · CRC ${valid ? 'valid' : 'invalid'}`;
+        let title = commandNames[command] || `SPORTident command 0x${command.toString(16).padStart(2, '0').toUpperCase()}`;
+        if (valid && command === 0xE8 && data.length >= 4) {
+          // E8 has one insignificant leading byte followed by the 3-byte card number.
+          const cardNumber = (data[data.length - 3] << 16) | (data[data.length - 2] << 8) | data[data.length - 1];
+          detail = `Card number ${cardNumber} · station ${stationCode} · CRC valid`;
+          addDecoded(title, detail, frame);
+          void beginCardRead(cardNumber, command);
+          continue;
+        } else if (valid && (command === 0xE6 || command === 0xE5) && data.length >= 3) {
+          const cardBytes = data.slice(-4);
+          const rawNumber = cardBytes.reduce((number, value) => (number * 256) + value, 0);
+          const cardNumber = rawNumber < 500000 && cardBytes.length === 4
+            ? (cardBytes[1] < 2 ? ((cardBytes[2] << 8) | cardBytes[3]) : cardBytes[1] * 100000 + ((cardBytes[2] << 8) | cardBytes[3]))
+            : rawNumber;
+          detail = `Card number ${cardNumber} · station ${stationCode} · CRC valid`;
+          addDecoded(title, detail, frame);
+          void beginCardRead(cardNumber, command);
+          continue;
+        } else if (!valid) {
+          detail += ' · frame may be incomplete or use another protocol variant';
+        }
+        addDecoded(title, detail, frame);
+        if (valid && command === 0xE7) {
+          if (activeRead) finishCardRead();
+          showCardSummary();
+        }
+        if (valid && activeRead && command === activeRead.family.readCommand) {
+          // Station replies prefix each data fragment with a block/sequence byte.
+          activeRead.parts.push(activeRead.family.stripPrefix === false ? data : data.slice(1));
+          activeRead.received++;
+          clearTimeout(readTimer);
+          if (activeRead.received >= activeRead.family.responses) {
+            finishCardRead();
+            showCardSummary();
+          } else if ((activeRead.family.type === 'SI-Card 8' || activeRead.family.type === 'SI-Card 9' || activeRead.family.type === 'pCard') && activeRead.received === 1) {
+            void sendRequest(activeRead.family.readCommand, [1]).catch(error => {
+              addDecoded('Read request failed', error.message, []);
+              finishCardRead();
+            });
+          } else {
+            readTimer = setTimeout(finishCardRead, 700);
+          }
+        }
+      }
+    }
+
+    function setConnected(connected, label = connected ? 'Connected' : 'Disconnected') {
+      status.classList.toggle('connected', connected);
+      statusText.textContent = label;
+      connectButton.disabled = connected || !getSelectedDevice();
+      disconnectButton.disabled = !connected;
+      baudSelect.disabled = connected;
+      readerSelect.disabled = connected;
+      addUsbReaderButton.disabled = connected || !('usb' in navigator);
+      addSerialReaderButton.disabled = connected || !('serial' in navigator);
+    }
+
+    function portDetails(serialPort) {
+      const info = serialPort.getInfo();
+      const vendor = info.usbVendorId == null ? null : info.usbVendorId.toString(16).padStart(4, '0').toUpperCase();
+      const product = info.usbProductId == null ? null : info.usbProductId.toString(16).padStart(4, '0').toUpperCase();
+      return { vendor, product, key: `serial:${vendor || 'device'}:${product || 'unknown'}` };
+    }
+
+    function usbDetails(device) {
+      const vendor = device.vendorId.toString(16).padStart(4, '0').toUpperCase();
+      const product = device.productId.toString(16).padStart(4, '0').toUpperCase();
+      const key = device.serialNumber
+        ? `usb:${vendor}:${product}:${device.serialNumber}`
+        : `usb:${vendor}:${product}`;
+      return { vendor, product, key };
+    }
+
+    function getSelectedDevice() {
+      return authorizedPorts.find(item => item.id === readerSelect.value) || null;
+    }
+
+    function getRememberedDevice() {
+      try { return localStorage.getItem(LAST_DEVICE_KEY); }
+      catch (_) { return null; }
+    }
+
+    async function refreshReaderList(preferredDevice = null) {
+      const devices = [];
+      if ('serial' in navigator) {
+        for (const serialPort of await navigator.serial.getPorts()) {
+          devices.push({ transport: 'serial', device: serialPort, details: portDetails(serialPort) });
+        }
+      }
+      if ('usb' in navigator) {
+        for (const device of await navigator.usb.getDevices()) {
+          devices.push({ transport: 'usb', device, details: usbDetails(device) });
+        }
+      }
+      const occurrenceByKey = new Map();
+      const entries = devices.map(({ transport, device, details }, index) => {
+        const occurrence = occurrenceByKey.get(details.key) || 0;
+        occurrenceByKey.set(details.key, occurrence + 1);
+        const id = `${details.key}:${occurrence}`;
+        const label = transport === 'usb'
+          ? `${device.productName || 'USB reader'} · ${details.vendor}:${details.product}${occurrence ? ` · ${occurrence + 1}` : ''}`
+          : details.vendor
+            ? `USB serial · VID ${details.vendor} · PID ${details.product}${occurrence ? ` · ${occurrence + 1}` : ''}`
+            : `Serial reader ${index + 1}`;
+        return { id, label, transport, device, details };
+      });
+      authorizedPorts = entries;
+      readerSelect.replaceChildren();
+      const placeholder = document.createElement('option');
+      placeholder.value = '';
+      placeholder.textContent = entries.length ? 'Select a reader' : 'No authorized reader';
+      readerSelect.append(placeholder);
+      for (const entry of entries) {
+        const option = document.createElement('option');
+        option.value = entry.id;
+        option.textContent = entry.label;
+        readerSelect.append(option);
+      }
+      let preferredId = null;
+      if (preferredDevice) {
+        const preferredKey = preferredDevice.vendorId != null
+          ? usbDetails(preferredDevice).key
+          : portDetails(preferredDevice).key;
+        const match = entries.find(entry => entry.device === preferredDevice)
+          || entries.find(entry => entry.details.key === preferredKey);
+        preferredId = match?.id || null;
+      }
+      const rememberedId = getRememberedDevice();
+      readerSelect.value = entries.some(entry => entry.id === (preferredId || rememberedId))
+        ? (preferredId || rememberedId)
+        : '';
+      connectButton.disabled = !readerSelect.value || Boolean(port || usbDevice);
+      readerSelect.disabled = Boolean(port || usbDevice);
+      addUsbReaderButton.disabled = Boolean(port || usbDevice) || !('usb' in navigator);
+      addSerialReaderButton.disabled = Boolean(port || usbDevice) || !('serial' in navigator);
+    }
+
+    function showError(message) {
+      errorBox.textContent = message;
+      errorBox.hidden = false;
+    }
+
+    function renderChunk(bytes) {
+      const data = Array.from(bytes);
+      parseSportidentBytes(data);
+      const time = new Date().toLocaleTimeString();
+      chunks.push({ time, data });
+      empty.hidden = true;
+      const entry = document.createElement('article');
+      entry.className = 'entry';
+      const meta = document.createElement('div');
+      meta.className = 'entry-meta';
+      const serial = document.createElement('strong');
+      serial.textContent = `Chunk ${chunks.length}`;
+      const stamp = document.createElement('span');
+      stamp.textContent = `${time} · ${data.length} byte${data.length === 1 ? '' : 's'}`;
+      meta.append(serial, stamp);
+      const hex = document.createElement('pre');
+      hex.textContent = data.map(byte => byte.toString(16).padStart(2, '0').toUpperCase()).join(' ');
+      const ascii = document.createElement('pre');
+      ascii.className = 'ascii';
+      ascii.textContent = data.map(byte => byte >= 32 && byte <= 126 ? String.fromCharCode(byte) : '·').join('');
+      entry.append(meta, hex, ascii);
+      log.append(entry);
+      log.scrollTop = log.scrollHeight;
+      count.textContent = `${chunks.length} chunk${chunks.length === 1 ? '' : 's'}`;
+      clearButton.disabled = false;
+      downloadButton.disabled = false;
+    }
+
+    async function readLoop() {
+      try {
+        while (port?.readable && !stopping) {
+          reader = port.readable.getReader();
+          try {
+            while (!stopping) {
+              const { value, done } = await reader.read();
+              if (done) break;
+              if (value?.length) renderChunk(value);
+            }
+          } finally {
+            reader.releaseLock();
+            reader = null;
+          }
+        }
+      } catch (error) {
+        if (!stopping) showError(`Serial read failed: ${error.message}`);
+      } finally {
+        if (!stopping) await closePort();
+      }
+    }
+
+    async function usbReadLoop() {
+      try {
+        while (usbDevice && !stopping) {
+          const result = await usbDevice.transferIn(usbEndpointIn, 64);
+          if (result.status && result.status !== 'ok') throw new Error(`USB transfer status: ${result.status}`);
+          if (stopping || !result.data) continue;
+          const view = result.data;
+          renderChunk(new Uint8Array(view.buffer, view.byteOffset, view.byteLength));
+        }
+      } catch (error) {
+        if (!stopping) showError(`USB read failed: ${error.message}`);
+      } finally {
+        if (!stopping) await closePort();
+      }
+    }
+
+    async function configureUsbReader(device) {
+      await device.open();
+      if (device.configuration === null) await device.selectConfiguration(1);
+      const usbInterface = device.configuration.interfaces[0];
+      const interfaceNumber = usbInterface.interfaceNumber;
+      await device.claimInterface(interfaceNumber);
+      const setup = { requestType: 'vendor', recipient: 'interface', index: interfaceNumber };
+      await device.controlTransferOut({ ...setup, request: 0x00, value: 0x01 });
+      const baud = Number(baudSelect.value);
+      const baudBytes = new Uint8Array([baud & 0xFF, (baud >> 8) & 0xFF, (baud >> 16) & 0xFF, (baud >> 24) & 0xFF]);
+      await device.controlTransferOut({ ...setup, request: 0x1E, value: 0x00 }, baudBytes);
+      await device.controlTransferOut({ ...setup, request: 0x07, value: 0x0303 });
+      const endpoints = usbInterface.alternate.endpoints;
+      const input = endpoints.find(endpoint => endpoint.direction === 'in');
+      const output = endpoints.find(endpoint => endpoint.direction === 'out');
+      if (!input || !output) throw new Error('The USB device does not expose both reader data endpoints.');
+      usbInterfaceNumber = interfaceNumber;
+      usbEndpointIn = input.endpointNumber;
+      usbEndpointOut = output.endpointNumber;
+    }
+
+    async function closePort() {
+      stopping = true;
+      try {
+        if (reader) await reader.cancel();
+      } catch (_) { /* Port may already have closed. */ }
+      try {
+        if (writer) { writer.releaseLock(); writer = null; }
+        if (port) await port.close();
+        if (usbDevice?.opened) await usbDevice.close();
+      } catch (error) {
+        showError(`Could not close reader: ${error.message}`);
+      }
+      reader = null;
+      port = null;
+      usbDevice = null;
+      usbEndpointIn = null;
+      usbEndpointOut = null;
+      usbInterfaceNumber = null;
+      stopping = false;
+      setConnected(false);
+    }
+
+    readerSelect.addEventListener('change', () => {
+      connectButton.disabled = !readerSelect.value || Boolean(port || usbDevice);
+    });
+
+    addUsbReaderButton.addEventListener('click', async () => {
+      errorBox.hidden = true;
+      if (!('usb' in navigator)) {
+        showError('WebUSB is unavailable in this browser.');
+        return;
+      }
+      try {
+        const newDevice = await navigator.usb.requestDevice({ filters: [
+          { vendorId: 0x10C4, productId: 0x800A },
+          { vendorId: 0x10C4, productId: 0xEA60 },
+          { vendorId: 0x10C4 }
+        ] });
+        await refreshReaderList(newDevice);
+      } catch (error) {
+        if (error.name !== 'NotFoundError') showError(`Could not add USB reader: ${error.message}`);
+      }
+    });
+
+    addSerialReaderButton.addEventListener('click', async () => {
+      errorBox.hidden = true;
+      if (!('serial' in navigator)) {
+        showError('Web Serial is unavailable in this browser.');
+        return;
+      }
+      try {
+        const newPort = await navigator.serial.requestPort();
+        await refreshReaderList(newPort);
+      } catch (error) {
+        if (error.name !== 'NotFoundError') showError(`Could not add serial reader: ${error.message}`);
+      }
+    });
+
+    connectButton.addEventListener('click', async () => {
+      errorBox.hidden = true;
+      const selection = getSelectedDevice();
+      if (!selection) {
+        showError('Select an authorized reader, or use Add USB reader or Add serial reader to authorize a device.');
+        return;
+      }
+      try {
+        if (selection.transport === 'serial') {
+          port = selection.device;
+          await port.open({ baudRate: Number(baudSelect.value), dataBits: 8, stopBits: 1, parity: 'none', flowControl: 'none' });
+          writer = port.writable.getWriter();
+        } else {
+          usbDevice = selection.device;
+          await configureUsbReader(usbDevice);
+        }
+        try { localStorage.setItem(LAST_DEVICE_KEY, readerSelect.value); } catch (_) { /* Browser storage may be unavailable for local files. */ }
+        setConnected(true, `Connected · ${baudSelect.value} baud`);
+        if (selection.transport === 'serial') readLoop();
+        else usbReadLoop();
+      } catch (error) {
+        if (error.name !== 'NotFoundError') showError(`Could not connect: ${error.message}`);
+        if (port) { try { await port.close(); } catch (_) {} port = null; }
+        if (usbDevice) {
+          try { if (usbDevice.opened) await usbDevice.close(); } catch (_) {}
+          usbDevice = null;
+          usbEndpointIn = null;
+          usbEndpointOut = null;
+          usbInterfaceNumber = null;
+        }
+        setConnected(false);
+      }
+    });
+
+    disconnectButton.addEventListener('click', closePort);
+    clearButton.addEventListener('click', () => {
+      chunks = [];
+      protocolBuffer = [];
+      decodedCount = 0;
+      latestReadout = null;
+      document.querySelector('#cardSummary').hidden = true;
+      document.querySelector('#structured').hidden = true;
+      document.querySelector('#decodedList').replaceChildren();
+      log.replaceChildren(empty);
+      empty.hidden = false;
+      count.textContent = '0 chunks';
+      clearButton.disabled = true;
+      downloadButton.disabled = true;
+    });
+    downloadButton.addEventListener('click', () => {
+      const content = chunks.map((chunk, index) => `Chunk ${index + 1} · ${chunk.time} · ${chunk.data.length} bytes\nHEX  ${chunk.data.map(byte => byte.toString(16).padStart(2, '0').toUpperCase()).join(' ')}\nTEXT ${chunk.data.map(byte => byte >= 32 && byte <= 126 ? String.fromCharCode(byte) : '·').join('')}`).join('\n\n');
+      const url = URL.createObjectURL(new Blob([content], { type: 'text/plain;charset=utf-8' }));
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `sportident-serial-${new Date().toISOString().replaceAll(':', '-')}.txt`;
+      link.click();
+      URL.revokeObjectURL(url);
+    });
+
+    if ('serial' in navigator || 'usb' in navigator) {
+      void refreshReaderList().catch(error => showError(`Could not list readers: ${error.message}`));
+      if ('serial' in navigator) {
+        navigator.serial.addEventListener('connect', () => {
+          void refreshReaderList().catch(error => showError(`Could not refresh readers: ${error.message}`));
+        });
+        navigator.serial.addEventListener('disconnect', event => {
+          if (event.target === port) {
+            showError('The reader was disconnected.');
+            closePort();
+          }
+          void refreshReaderList().catch(() => {});
+        });
+      }
+      if ('usb' in navigator) {
+        navigator.usb.addEventListener('connect', () => {
+          void refreshReaderList().catch(error => showError(`Could not refresh readers: ${error.message}`));
+        });
+        navigator.usb.addEventListener('disconnect', event => {
+          if (event.device === usbDevice) {
+            showError('The USB reader was disconnected.');
+            void closePort();
+          }
+          void refreshReaderList().catch(() => {});
+        });
+      }
+    }
+  </script>
+</body>
+</html>
